@@ -1,0 +1,13 @@
+{
+  "name": "qwanteos-dashboard",
+  "version": "1.0.0",
+  "description": "Dashboard SETUP QWANTEOS",
+  "main": "index.html",
+  "scripts": {
+    "dev": "live-server --port=3000",
+    "build": "echo 'Build complete'"
+  },
+  "devDependencies": {
+    "live-server": "^1.2.2"
+  }
+}

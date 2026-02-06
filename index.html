@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard SETUP QWANTEOS</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/locale/fr.min.js"></script>
+</head>
+<body>
+    <!-- Header avec Logo -->
+    <header class="dashboard-header">
+        <div class="logo-container">
+            <div class="logo">QWANTEOS</div>
+            <div class="logo-subtitle">SETUP DASHBOARD</div>
+        </div>
+        <div class="current-date" id="currentDate"></div>
+    </header>
+
+    <!-- Navigation -->
+    <nav class="tabs">
+        <button class="tab-btn active" data-tab="tab1">
+            <i class="fas fa-chart-bar"></i> Statistiques
+        </button>
+        <button class="tab-btn" data-tab="tab2">
+            <i class="fas fa-tasks"></i> Suivi en Temps Réel
+        </button>
+        <button class="tab-btn" data-tab="tab3">
+            <i class="fas fa-cog"></i> Paramètres
+        </button>
+    </nav>
+
+    <!-- Contenu des Onglets -->
+    <main class="tab-content">
+        <!-- Onglet 1: Statistiques -->
+        <section id="tab1" class="tab-pane active">
+            <div class="tab-header">
+                <h2><i class="fas fa-chart-pie"></i> Tableau de Bord Statistiques</h2>
+                <div class="export-controls">
+                    <div class="date-filter">
+                        <label>Filtrer par période:</label>
+                        <input type="date" id="startDate">
+                        <span>à</span>
+                        <input type="date" id="endDate">
+                        <button onclick="applyDateFilter()" class="btn-filter">
+                            <i class="fas fa-filter"></i> Appliquer
+                        </button>
+                        <button onclick="resetFilter()" class="btn-reset">
+                            <i class="fas fa-redo"></i> Réinitialiser
+                        </button>
+                    </div>
+                    <button onclick="exportData()" class="btn-export">
+                        <i class="fas fa-file-excel"></i> Exporter les Données
+                    </button>
+                </div>
+            </div>
+
+            <div class="stats-grid">
+                <!-- Résumé Général -->
+                <div class="summary-card">
+                    <h3><i class="fas fa-clipboard-check"></i> Résumé du Travail</h3>
+                    <div class="summary-stats">
+                        <div class="stat-item">
+                            <span class="stat-label">Tâches Terminées</span>
+                            <span class="stat-value" id="totalTasks">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Temps Total</span>
+                            <span class="stat-value" id="totalTime">0h 00m</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Tâches en Cours</span>
+                            <span class="stat-value" id="activeTasks">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Productivité Moyenne</span>
+                            <span class="stat-value" id="avgProductivity">0%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Graphique Catégories -->
+                <div class="chart-card">
+                    <h3><i class="fas fa-chart-pie"></i> Répartition par Catégorie</h3>
+                    <div class="chart-container">
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Tableau Statistiques Agents -->
+                <div class="table-card full-width">
+                    <h3><i class="fas fa-users"></i> Statistiques par Agent</h3>
+                    <div class="table-responsive">
+                        <table id="agentStatsTable">
+                            <thead>
+                                <tr>
+                                    <th>Agent</th>
+                                    <th>Tâches Terminées</th>
+                                    <th>Temps Total</th>
+                                    <th>Temps Moyen/Tâche</th>
+                                    <th>Efficacité</th>
+                                    <th>Dernière Activité</th>
+                                </tr>
+                            </thead>
+                            <tbody id="agentStatsBody">
+                                <!-- Données générées dynamiquement -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Graphique Performance -->
+                <div class="chart-card">
+                    <h3><i class="fas fa-chart-line"></i> Performance Journalière</h3>
+                    <div class="chart-container">
+                        <canvas id="performanceChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Détails des Tâches -->
+                <div class="table-card full-width">
+                    <h3><i class="fas fa-list-ul"></i> Détail des Tâches Traitées</h3>
+                    <div class="table-responsive">
+                        <table id="tasksTable">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Nom Tâche</th>
+                                    <th>Catégorie</th>
+                                    <th>Agent</th>
+                                    <th>Date Début</th>
+                                    <th>Date Fin</th>
+                                    <th>Durée</th>
+                                    <th>Statut</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tasksBody">
+                                <!-- Données générées dynamiquement -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Onglet 2: Suivi en Temps Réel -->
+        <section id="tab2" class="tab-pane">
+            <div class="tab-header">
+                <h2><i class="fas fa-play-circle"></i> Suivi des Tâches en Temps Réel</h2>
+                <div class="time-display">
+                    <div class="current-time" id="currentTime"></div>
+                </div>
+            </div>
+
+            <div class="tracking-grid">
+                <!-- Formulaire Nouvelle Tâche -->
+                <div class="form-card">
+                    <h3><i class="fas fa-plus-circle"></i> Nouvelle Tâche</h3>
+                    <form id="taskForm">
+                        <div class="form-group">
+                            <label for="taskName"><i class="fas fa-heading"></i> Nom de la Tâche *</label>
+                            <input type="text" id="taskName" required placeholder="Ex: Analyse des logs système">
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="taskCategory"><i class="fas fa-tags"></i> Catégorie *</label>
+                                <select id="taskCategory" required>
+                                    <option value="">Sélectionner une catégorie</option>
+                                    <option value="Développement">Développement</option>
+                                    <option value="Test">Test</option>
+                                    <option value="Maintenance">Maintenance</option>
+                                    <option value="Support">Support</option>
+                                    <option value="Documentation">Documentation</option>
+                                    <option value="Réunion">Réunion</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="agentName"><i class="fas fa-user"></i> Agent *</label>
+                                <select id="agentName" required>
+                                    <!-- Chargé dynamiquement depuis les paramètres -->
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="taskDescription"><i class="fas fa-align-left"></i> Description</label>
+                            <textarea id="taskDescription" rows="3" placeholder="Description détaillée de la tâche..."></textarea>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="button" onclick="startNewTask()" class="btn-start">
+                                <i class="fas fa-play"></i> Démarrer le Chrono
+                            </button>
+                            <button type="reset" class="btn-reset-form">
+                                <i class="fas fa-eraser"></i> Effacer
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Chronomètre en Cours -->
+                <div class="timer-card">
+                    <h3><i class="fas fa-stopwatch"></i> Chronomètre Actif</h3>
+                    <div class="timer-display" id="currentTimer">
+                        <div class="timer-time">00:00:00</div>
+                        <div class="timer-status">Aucune tâche en cours</div>
+                    </div>
+                    
+                    <div class="timer-controls" id="timerControls">
+                        <button onclick="pauseTimer()" class="btn-pause" disabled>
+                            <i class="fas fa-pause"></i> Pause
+                        </button>
+                        <button onclick="resumeTimer()" class="btn-resume" disabled>
+                            <i class="fas fa-play"></i> Reprendre
+                        </button>
+                        <button onclick="stopTimer()" class="btn-stop" disabled>
+                            <i class="fas fa-stop"></i> Terminer
+                        </button>
+                    </div>
+
+                    <div class="current-task-info" id="currentTaskInfo">
+                        <!-- Informations de la tâche en cours -->
+                    </div>
+                </div>
+
+                <!-- Historique des Tâches du Jour -->
+                <div class="history-card full-width">
+                    <h3><i class="fas fa-history"></i> Tâches du Jour</h3>
+                    <div class="table-responsive">
+                        <table id="todayTasksTable">
+                            <thead>
+                                <tr>
+                                    <th>Tâche</th>
+                                    <th>Catégorie</th>
+                                    <th>Agent</th>
+                                    <th>Début</th>
+                                    <th>Fin</th>
+                                    <th>Durée</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="todayTasksBody">
+                                <!-- Données générées dynamiquement -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Statistiques Temps Réel -->
+                <div class="realtime-stats">
+                    <div class="stat-box">
+                        <div class="stat-icon">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-title">Temps Total Aujourd'hui</div>
+                            <div class="stat-value" id="todayTotalTime">00:00:00</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-box">
+                        <div class="stat-icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-title">Tâches Terminées</div>
+                            <div class="stat-value" id="todayCompletedTasks">0</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-box">
+                        <div class="stat-icon">
+                            <i class="fas fa-running"></i>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-title">Tâche en Cours</div>
+                            <div class="stat-value" id="todayActiveTask">Aucune</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Onglet 3: Paramètres -->
+        <section id="tab3" class="tab-pane">
+            <div class="tab-header">
+                <h2><i class="fas fa-sliders-h"></i> Paramètres du Dashboard</h2>
+                <div class="settings-actions">
+                    <button onclick="saveSettings()" class="btn-save">
+                        <i class="fas fa-save"></i> Sauvegarder
+                    </button>
+                    <button onclick="exportSettings()" class="btn-export">
+                        <i class="fas fa-download"></i> Exporter Config
+                    </button>
+                    <button onclick="importSettings()" class="btn-import">
+                        <i class="fas fa-upload"></i> Importer Config
+                    </button>
+                </div>
+            </div>
+
+            <div class="settings-grid">
+                <!-- Gestion des Agents -->
+                <div class="settings-card">
+                    <h3><i class="fas fa-users-cog"></i> Gestion des Agents</h3>
+                    <div class="settings-form">
+                        <div class="form-group">
+                            <label for="newAgentName">Nom de l'Agent *</label>
+                            <input type="text" id="newAgentName" placeholder="Ex: Jean Dupont">
+                        </div>
+                        <div class="form-group">
+                            <label for="newAgentEmail">Email</label>
+                            <input type="email" id="newAgentEmail" placeholder="agent@entreprise.com">
+                        </div>
+                        <div class="form-group">
+                            <label for="newAgentDepartment">Département</label>
+                            <input type="text" id="newAgentDepartment" placeholder="Ex: Développement">
+                        </div>
+                        <button onclick="addAgent()" class="btn-add">
+                            <i class="fas fa-user-plus"></i> Ajouter l'Agent
+                        </button>
+                    </div>
+
+                    <div class="agents-list">
+                        <h4>Liste des Agents</h4>
+                        <table id="agentsTable">
+                            <thead>
+                                <tr>
+                                    <th>Nom</th>
+                                    <th>Email</th>
+                                    <th>Département</th>
+                                    <th>Date d'Ajout</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="agentsListBody">
+                                <!-- Chargé dynamiquement -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Catégories de Tâches -->
+                <div class="settings-card">
+                    <h3><i class="fas fa-tags"></i> Catégories de Tâches</h3>
+                    <div class="settings-form">
+                        <div class="form-group">
+                            <label for="newCategoryName">Nom de la Catégorie *</label>
+                            <input type="text" id="newCategoryName" placeholder="Ex: Développement">
+                        </div>
+                        <div class="form-group">
+                            <label for="newCategoryColor">Couleur</label>
+                            <input type="color" id="newCategoryColor" value="#3498db">
+                        </div>
+                        <button onclick="addCategory()" class="btn-add">
+                            <i class="fas fa-tag"></i> Ajouter la Catégorie
+                        </button>
+                    </div>
+
+                    <div class="categories-list">
+                        <h4>Catégories Disponibles</h4>
+                        <div id="categoriesList">
+                            <!-- Chargé dynamiquement -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Paramètres d'Affichage -->
+                <div class="settings-card">
+                    <h3><i class="fas fa-palette"></i> Personnalisation</h3>
+                    <div class="settings-form">
+                        <div class="form-group">
+                            <label for="dashboardTheme">Thème du Dashboard</label>
+                            <select id="dashboardTheme" onchange="changeTheme(this.value)">
+                                <option value="light">Clair</option>
+                                <option value="dark">Sombre</option>
+                                <option value="blue">Bleu</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="timeFormat">Format d'Heure</label>
+                            <select id="timeFormat">
+                                <option value="24">24 Heures</option>
+                                <option value="12">12 Heures (AM/PM)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="autoSave">Sauvegarde Automatique</label>
+                            <select id="autoSave">
+                                <option value="5">Toutes les 5 minutes</option>
+                                <option value="10">Toutes les 10 minutes</option>
+                                <option value="15">Toutes les 15 minutes</option>
+                                <option value="0">Désactivée</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Export/Import -->
+                <div class="settings-card full-width">
+                    <h3><i class="fas fa-database"></i> Gestion des Données</h3>
+                    <div class="data-actions">
+                        <div class="action-group">
+                            <h4>Sauvegarde</h4>
+                            <button onclick="backupData()" class="btn-backup">
+                                <i class="fas fa-save"></i> Sauvegarder Toutes les Données
+                            </button>
+                            <p class="info-text">Dernière sauvegarde: <span id="lastBackup">Jamais</span></p>
+                        </div>
+                        
+                        <div class="action-group">
+                            <h4>Restauration</h4>
+                            <div class="file-upload">
+                                <input type="file" id="restoreFile" accept=".json" hidden>
+                                <button onclick="document.getElementById('restoreFile').click()" class="btn-restore">
+                                    <i class="fas fa-file-import"></i> Choisir un Fichier de Sauvegarde
+                                </button>
+                            </div>
+                            <button onclick="restoreData()" class="btn-confirm">
+                                <i class="fas fa-history"></i> Restaurer les Données
+                            </button>
+                        </div>
+                        
+                        <div class="action-group">
+                            <h4>Maintenance</h4>
+                            <button onclick="clearOldData()" class="btn-clear">
+                                <i class="fas fa-trash"></i> Nettoyer les Anciennes Données
+                            </button>
+                            <button onclick="resetDashboard()" class="btn-reset-dash">
+                                <i class="fas fa-broom"></i> Réinitialiser le Dashboard
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Informations Système -->
+                <div class="settings-card">
+                    <h3><i class="fas fa-info-circle"></i> Informations</h3>
+                    <div class="system-info">
+                        <div class="info-item">
+                            <span class="info-label">Version Dashboard:</span>
+                            <span class="info-value">2.0.1</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Données Stockées:</span>
+                            <span class="info-value" id="dataSize">0 KB</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Tâches Enregistrées:</span>
+                            <span class="info-value" id="totalRecords">0</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Dernière Mise à Jour:</span>
+                            <span class="info-value" id="lastUpdate">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="dashboard-footer">
+        <div class="footer-content">
+            <div class="footer-logo">QWANTEOS SETUP</div>
+            <div class="footer-info">
+                <span><i class="fas fa-shield-alt"></i> Données stockées localement</span>
+                <span><i class="fas fa-sync-alt"></i> Mise à jour automatique</span>
+                <span><i class="fas fa-mobile-alt"></i> Compatible mobile</span>
+            </div>
+            <div class="footer-version">
+                Dashboard v2.0.1 | © 2024 SETUP QWANTEOS
+            </div>
+        </div>
+    </footer>
+
+    <!-- Script principal -->
+    <script src="dashboard.js"></script>
+</body>
+</html>
