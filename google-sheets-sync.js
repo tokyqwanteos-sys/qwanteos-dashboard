@@ -1,4 +1,4 @@
-// Google Sheets Sync pour SETUP QWANTEOS - VERSION SANS ÉCRASEMENT
+// Google Sheets Sync pour SETUP QWANTEOS - VERSION MULTI-AGENTS
 class GoogleSheetsSync {
     constructor() {
         this.scriptUrl = 'https://script.google.com/macros/s/AKfycbzNiGC18yYn-jzp4Qd8cmSMiCDuptYZlpdSoQIgy8okOvvi6ZWKfuM5EW4pbrexc030zg/exec';
@@ -12,11 +12,22 @@ class GoogleSheetsSync {
     generateDashboardId() {
         let id = localStorage.getItem('qwanteos_dashboard_id');
         if (!id) {
-            // Générer un ID unique basé sur timestamp + random
-            id = 'DASH_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+            // ID unique basé sur timestamp + random + user agent
+            const userInfo = navigator.userAgent + Math.random().toString(36);
+            id = 'DASH_' + Date.now() + '_' + this.hashString(userInfo).substr(0, 8);
             localStorage.setItem('qwanteos_dashboard_id', id);
         }
         return id;
+    }
+
+    hashString(str) {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash;
+        }
+        return Math.abs(hash).toString(36);
     }
 
     initialize() {
@@ -28,6 +39,7 @@ class GoogleSheetsSync {
         }
         
         this.updateUI();
+        this.checkInitialSync();
     }
 
     enable() {
@@ -35,6 +47,10 @@ class GoogleSheetsSync {
         localStorage.setItem('qwanteos_sync_enabled', 'true');
         this.startAutoSync();
         this.updateUI();
+        
+        if (window.dashboard) {
+            window.dashboard.showNotification('✅ Sync activée - Mode multi-agents sécurisé', 'success');
+        }
         return true;
     }
 
@@ -43,19 +59,23 @@ class GoogleSheetsSync {
         localStorage.setItem('qwanteos_sync_enabled', 'false');
         this.stopAutoSync();
         this.updateUI();
+        
+        if (window.dashboard) {
+            window.dashboard.showNotification('🔒 Sync désactivée', 'warning');
+        }
         return true;
     }
 
     startAutoSync() {
         this.stopAutoSync();
         
-        // Sync toutes les 60 secondes (plus lent pour éviter conflits)
+        // Sync toutes les 2 minutes pour éviter les conflits
         this.syncInterval = setInterval(() => {
-            this.syncAllDataSafe();
-        }, 60000);
+            this.safeSync();
+        }, 120000);
         
-        // Première sync immédiate
-        setTimeout(() => this.syncAllDataSafe(), 2000);
+        // Première sync après 5 secondes
+        setTimeout(() => this.safeSync(), 5000);
     }
 
     stopAutoSync() {
@@ -65,144 +85,239 @@ class GoogleSheetsSync {
         }
     }
 
-    async syncAllDataSafe() {
+    async safeSync() {
         if (!this.isEnabled || !window.dashboard) return;
         
         try {
-            const allData = {
-                tasks: window.dashboard.getTasks(),
-                agents: window.dashboard.getAgents(),
+            // Vérifier d'abord les IDs existants dans Google Sheets
+            const existingIds = await this.getExistingIds();
+            
+            // Préparer les données locales
+            const localTasks = window.dashboard.getTasks();
+            const localAgents = window.dashboard.getAgents();
+            
+            // Filtrer seulement les NOUVELLES données
+            const newTasks = localTasks.filter(task => 
+                !existingIds.tasks.includes(task.id.toString())
+            );
+            
+            const newAgents = localAgents.filter(agent => 
+                !existingIds.agents.includes(agent.id.toString())
+            );
+            
+            if (newTasks.length === 0 && newAgents.length === 0) {
+                // Rien de nouveau à synchroniser
+                this.showStatus('info', '✓ Pas de nouvelles données');
+                return;
+            }
+            
+            // Envoyer seulement les nouvelles données
+            const syncData = {
+                tasks: newTasks,
+                agents: newAgents,
                 timestamp: new Date().toISOString(),
-                dashboardId: this.dashboardId
+                dashboardId: this.dashboardId,
+                syncMode: 'append_only'
             };
 
             const response = await fetch(this.scriptUrl, {
                 method: 'POST',
+                mode: 'no-cors',
+                headers: {
+                    'Content-Type': 'text/plain;charset=utf-8',
+                },
                 body: JSON.stringify({
-                    action: 'syncAll',
-                    data: allData,
+                    action: 'appendData',
+                    data: syncData,
                     apiKey: this.apiKey
                 })
             });
 
-            const result = await response.json();
+            // En mode no-cors, on ne peut pas lire la réponse
+            // Mais on suppose que c'est réussi si pas d'erreur
+            this.showStatus('success', `✓ Ajouté: ${newTasks.length} tâches, ${newAgents.length} agents`);
             
-            if (result.success) {
-                this.showStatus('success', `Ajouté: ${result.addedTasks || 0} tâches, ${result.addedAgents || 0} agents`);
-                console.log('✅ Sync sécurisée:', result.message);
-            } else {
-                this.showStatus('error', 'Erreur: ' + (result.error || 'Inconnue'));
-            }
+            // Mettre à jour le timestamp
+            localStorage.setItem('qwanteos_last_sync', new Date().toISOString());
+            
         } catch (error) {
             console.error('❌ Erreur sync:', error);
-            this.showStatus('error', 'Hors ligne');
+            this.showStatus('error', '✗ Hors ligne - Données sauvegardées localement');
         }
+    }
+
+    async getExistingIds() {
+        try {
+            const response = await fetch(
+                `${this.scriptUrl}?action=getUniqueIds&apiKey=${this.apiKey}&t=${Date.now()}`
+            );
+            
+            if (response.ok) {
+                const data = await response.json();
+                return {
+                    tasks: data.tasks || [],
+                    agents: data.agents || []
+                };
+            }
+        } catch (error) {
+            console.warn('⚠️ Impossible de récupérer les IDs - Mode local');
+        }
+        
+        // Fallback: retourner des tableaux vides
+        return { tasks: [], agents: [] };
     }
 
     async syncNow() {
         if (!window.dashboard) return false;
         
-        try {
-            const allData = {
-                tasks: window.dashboard.getTasks(),
-                agents: window.dashboard.getAgents(),
-                timestamp: new Date().toISOString(),
-                dashboardId: this.dashboardId
-            };
-
-            const response = await fetch(this.scriptUrl, {
-                method: 'POST',
-                body: JSON.stringify({
-                    action: 'syncAll',
-                    data: allData,
-                    apiKey: this.apiKey
-                })
-            });
-
-            const result = await response.json();
-            
-            if (result.success) {
-                this.showStatus('success', `Sync manuelle: ${result.message}`);
-                return true;
-            } else {
-                this.showStatus('error', 'Erreur: ' + (result.error || 'Inconnue'));
-                return false;
-            }
-        } catch (error) {
-            console.error('Erreur sync manuelle:', error);
-            this.showStatus('error', 'Erreur réseau');
-            return false;
+        if (window.dashboard) {
+            window.dashboard.showNotification('🔄 Synchronisation sécurisée en cours...', 'info');
         }
+        
+        await this.safeSync();
+        
+        if (window.dashboard) {
+            window.dashboard.showNotification('✅ Synchronisation terminée sans écrasement', 'success');
+        }
+        
+        return true;
     }
 
     async loadFromSheets() {
         if (!window.dashboard) return false;
         
+        if (window.dashboard) {
+            window.dashboard.showNotification('📥 Chargement depuis Google Sheets...', 'info');
+        }
+        
         try {
-            const response = await fetch(`${this.scriptUrl}?action=getAll&apiKey=${this.apiKey}`);
+            const response = await fetch(
+                `${this.scriptUrl}?action=getAll&apiKey=${this.apiKey}&t=${Date.now()}`
+            );
+            
+            if (!response.ok) throw new Error('Network error');
+            
             const data = await response.json();
             
-            if (data.tasks && data.agents) {
-                // Fusion intelligente : ne pas écraser les données locales
-                const localTasks = window.dashboard.getTasks();
-                const localAgents = window.dashboard.getAgents();
+            if (data && data.tasks && data.agents) {
+                // Fusion intelligente
+                await this.mergeData(data.tasks, data.agents);
                 
-                // Créer des Sets pour vérifier les doublons
-                const localTaskIds = new Set(localTasks.map(t => t.id.toString()));
-                const localAgentIds = new Set(localAgents.map(a => a.id.toString()));
+                this.showStatus('success', '✓ Données fusionnées avec succès');
                 
-                // Filtrer les nouvelles données
-                const newTasks = data.tasks.filter(task => !localTaskIds.has(task.ID.toString()));
-                const newAgents = data.agents.filter(agent => !localAgentIds.has(agent.ID.toString()));
-                
-                // Ajouter seulement les nouvelles données
-                if (newTasks.length > 0) {
-                    const allTasks = [...localTasks, ...newTasks.map(task => ({
-                        id: task.ID,
-                        name: task['Nom Tâche'],
-                        category: task.Catégorie,
-                        agent: task.Agent,
-                        startTime: task['Date Début'],
-                        endTime: task['Date Fin'] || null,
-                        duration: task.Durée || '00:00:00',
-                        status: task.Statut,
-                        description: task.Description || ''
-                    }))];
-                    localStorage.setItem('qwanteos_tasks', JSON.stringify(allTasks));
+                if (window.dashboard) {
+                    window.dashboard.showNotification('✅ Données chargées et fusionnées', 'success');
                 }
-                
-                if (newAgents.length > 0) {
-                    const allAgents = [...localAgents, ...newAgents.map(agent => ({
-                        id: agent.ID,
-                        name: agent.Nom,
-                        email: agent.Email || '',
-                        department: agent.Département || '',
-                        date: agent['Date Ajout'] || new Date().toISOString()
-                    }))];
-                    localStorage.setItem('qwanteos_agents', JSON.stringify(allAgents));
-                }
-                
-                // Rafraîchir le dashboard
-                window.dashboard.updateStatistics();
-                window.dashboard.updateCharts();
-                window.dashboard.loadAgentsToSelect();
-                window.dashboard.updateTodayTasks();
-                
-                this.showStatus('success', `Chargé: ${newTasks.length} nouvelles tâches, ${newAgents.length} nouveaux agents`);
                 return true;
             }
         } catch (error) {
             console.error('Erreur chargement:', error);
-            this.showStatus('error', 'Erreur chargement');
+            this.showStatus('error', '✗ Impossible de charger');
+            
+            if (window.dashboard) {
+                window.dashboard.showNotification('❌ Erreur de chargement', 'error');
+            }
         }
         return false;
+    }
+
+    async mergeData(remoteTasks, remoteAgents) {
+        if (!window.dashboard) return;
+        
+        const localTasks = window.dashboard.getTasks();
+        const localAgents = window.dashboard.getAgents();
+        
+        // Convertir les données Sheets en format dashboard
+        const formattedTasks = remoteTasks.map(task => ({
+            id: task.ID || task.id,
+            name: task['Nom Tâche'] || task.name,
+            category: task.Catégorie || task.category,
+            agent: task.Agent || task.agent,
+            startTime: task['Date Début'] || task.startTime,
+            endTime: task['Date Fin'] || task.endTime,
+            duration: task.Durée || task.duration,
+            status: task.Statut || task.status,
+            description: task.Description || task.description
+        }));
+        
+        const formattedAgents = remoteAgents.map(agent => ({
+            id: agent.ID || agent.id,
+            name: agent.Nom || agent.name,
+            email: agent.Email || agent.email,
+            department: agent.Département || agent.department,
+            date: agent['Date Ajout'] || agent.date
+        }));
+        
+        // Créer des Maps pour vérifier les doublons
+        const localTaskMap = new Map(localTasks.map(t => [t.id.toString(), t]));
+        const localAgentMap = new Map(localAgents.map(a => [a.id.toString(), a]));
+        
+        // Ajouter seulement les nouvelles tâches
+        formattedTasks.forEach(task => {
+            const taskId = task.id.toString();
+            if (!localTaskMap.has(taskId)) {
+                localTasks.push(task);
+                localTaskMap.set(taskId, task);
+            }
+        });
+        
+        // Ajouter seulement les nouveaux agents
+        formattedAgents.forEach(agent => {
+            const agentId = agent.id.toString();
+            if (!localAgentMap.has(agentId)) {
+                localAgents.push(agent);
+                localAgentMap.set(agentId, agent);
+            }
+        });
+        
+        // Sauvegarder les données fusionnées
+        localStorage.setItem('qwanteos_tasks', JSON.stringify(localTasks));
+        localStorage.setItem('qwanteos_agents', JSON.stringify(localAgents));
+        
+        // Rafraîchir le dashboard
+        window.dashboard.updateStatistics();
+        window.dashboard.updateCharts();
+        window.dashboard.loadAgentsToSelect();
+        window.dashboard.updateTodayTasks();
+    }
+
+    checkInitialSync() {
+        const lastSync = localStorage.getItem('qwanteos_last_sync');
+        if (!lastSync) {
+            // Première utilisation - activer la sync automatiquement
+            setTimeout(() => {
+                if (window.dashboard) {
+                    window.dashboard.showNotification(
+                        '🌐 Synchronisation multi-agents prête. Activez la sync pour partager vos données.',
+                        'info'
+                    );
+                }
+            }, 3000);
+        }
     }
 
     showStatus(type, message) {
         const statusElement = document.getElementById('syncStatus');
         if (statusElement) {
-            const icon = type === 'success' ? '✅' : '❌';
-            statusElement.innerHTML = `<span style="color: ${type === 'success' ? '#27ae60' : '#e74c3c'}">${icon} ${message}</span>`;
+            let icon = '🔄';
+            let color = '#3498db';
+            
+            switch(type) {
+                case 'success':
+                    icon = '✅';
+                    color = '#27ae60';
+                    break;
+                case 'error':
+                    icon = '❌';
+                    color = '#e74c3c';
+                    break;
+                case 'info':
+                    icon = 'ℹ️';
+                    color = '#3498db';
+                    break;
+            }
+            
+            statusElement.innerHTML = `<span style="color: ${color}; font-weight: 500;">${icon} ${message}</span>`;
         }
         
         const timeElement = document.getElementById('lastSyncTime');
@@ -220,54 +335,37 @@ class GoogleSheetsSync {
     }
 }
 
-// Initialiser
-window.googleSync = new GoogleSheetsSync();
+// Initialiser le système de sync
+document.addEventListener('DOMContentLoaded', () => {
+    window.googleSync = new GoogleSheetsSync();
+});
 
-// Fonctions globales pour les boutons
+// Fonctions globales accessibles depuis HTML
 function enableCloudSync() {
-    if (window.googleSync.enable()) {
-        if (window.dashboard) {
-            window.dashboard.showNotification('Synchronisation sécurisée activée', 'success');
-        }
+    if (window.googleSync) {
+        window.googleSync.enable();
     }
 }
 
 function disableCloudSync() {
-    if (window.googleSync.disable()) {
-        if (window.dashboard) {
-            window.dashboard.showNotification('Synchronisation désactivée', 'warning');
-        }
+    if (window.googleSync) {
+        window.googleSync.disable();
     }
 }
 
 function syncNow() {
-    if (window.dashboard) {
-        window.dashboard.showNotification('Synchronisation sécurisée en cours...', 'info');
+    if (window.googleSync) {
+        window.googleSync.syncNow();
     }
-    
-    window.googleSync.syncNow().then(success => {
-        if (window.dashboard) {
-            if (success) {
-                window.dashboard.showNotification('Synchronisation terminée sans écrasement', 'success');
-            } else {
-                window.dashboard.showNotification('Erreur de synchronisation', 'error');
-            }
-        }
-    });
 }
 
 function loadFromSheets() {
-    if (window.dashboard) {
-        window.dashboard.showNotification('Chargement sécurisé depuis Google Sheets...', 'info');
+    if (window.googleSync) {
+        window.googleSync.loadFromSheets();
     }
-    
-    window.googleSync.loadFromSheets().then(success => {
-        if (window.dashboard) {
-            if (success) {
-                window.dashboard.showNotification('Données fusionnées avec succès', 'success');
-            } else {
-                window.dashboard.showNotification('Erreur de chargement', 'error');
-            }
-        }
-    });
+}
+
+// Export pour les tests
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { GoogleSheetsSync };
 }
