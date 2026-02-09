@@ -33,11 +33,7 @@ class Dashboard {
     initStorage() {
         // Vérifier et initialiser le stockage local
         if (!localStorage.getItem('qwanteos_agents')) {
-            const defaultAgents = [
-                { id: 1, name: 'Agent 1', email: 'agent1@qwanteos.com', department: 'Développement', date: new Date().toISOString() },
-                { id: 2, name: 'Agent 2', email: 'agent2@qwanteos.com', department: 'Test', date: new Date().toISOString() },
-                { id: 3, name: 'Agent 3', email: 'agent3@qwanteos.com', department: 'Support', date: new Date().toISOString() }
-            ];
+
             localStorage.setItem('qwanteos_agents', JSON.stringify(defaultAgents));
         }
 
