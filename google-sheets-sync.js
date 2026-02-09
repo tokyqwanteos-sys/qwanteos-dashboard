@@ -1,15 +1,25 @@
-// Google Sheets Sync pour SETUP QWANTEOS
+// Google Sheets Sync pour SETUP QWANTEOS - VERSION SANS ÉCRASEMENT
 class GoogleSheetsSync {
     constructor() {
-        this.scriptUrl = 'https://script.google.com/macros/s/AKfycbya0Uq_S3eXCTF-rjJc_qmEH4Eb7sQ1sSeWrxspIJL4N0GT0cYfzhXnHkK4NBlWoZTwHw/exec';
+        this.scriptUrl = 'https://script.google.com/macros/s/AKfycbzNiGC18yYn-jzp4Qd8cmSMiCDuptYZlpdSoQIgy8okOvvi6ZWKfuM5EW4pbrexc030zg/exec';
         this.apiKey = 'SETUP_QWANTEOS_2024';
         this.isEnabled = false;
         this.syncInterval = null;
+        this.dashboardId = this.generateDashboardId();
         this.initialize();
     }
 
+    generateDashboardId() {
+        let id = localStorage.getItem('qwanteos_dashboard_id');
+        if (!id) {
+            // Générer un ID unique basé sur timestamp + random
+            id = 'DASH_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+            localStorage.setItem('qwanteos_dashboard_id', id);
+        }
+        return id;
+    }
+
     initialize() {
-        // Vérifier si la sync est déjà activée
         const saved = localStorage.getItem('qwanteos_sync_enabled');
         this.isEnabled = saved === 'true';
         
@@ -39,13 +49,13 @@ class GoogleSheetsSync {
     startAutoSync() {
         this.stopAutoSync();
         
-        // Sync toutes les 30 secondes
+        // Sync toutes les 60 secondes (plus lent pour éviter conflits)
         this.syncInterval = setInterval(() => {
-            this.syncAllData();
-        }, 30000);
+            this.syncAllDataSafe();
+        }, 60000);
         
         // Première sync immédiate
-        setTimeout(() => this.syncAllData(), 1000);
+        setTimeout(() => this.syncAllDataSafe(), 2000);
     }
 
     stopAutoSync() {
@@ -55,14 +65,15 @@ class GoogleSheetsSync {
         }
     }
 
-    async syncAllData() {
+    async syncAllDataSafe() {
         if (!this.isEnabled || !window.dashboard) return;
         
         try {
             const allData = {
                 tasks: window.dashboard.getTasks(),
                 agents: window.dashboard.getAgents(),
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                dashboardId: this.dashboardId
             };
 
             const response = await fetch(this.scriptUrl, {
@@ -77,58 +88,14 @@ class GoogleSheetsSync {
             const result = await response.json();
             
             if (result.success) {
-                this.showStatus('success', `Sync: ${result.message}`);
-                console.log('✅ Sync réussie:', result.message);
+                this.showStatus('success', `Ajouté: ${result.addedTasks || 0} tâches, ${result.addedAgents || 0} agents`);
+                console.log('✅ Sync sécurisée:', result.message);
             } else {
                 this.showStatus('error', 'Erreur: ' + (result.error || 'Inconnue'));
             }
         } catch (error) {
             console.error('❌ Erreur sync:', error);
             this.showStatus('error', 'Hors ligne');
-        }
-    }
-
-    async syncTask(task) {
-        if (!this.isEnabled) return false;
-        
-        try {
-            const response = await fetch(this.scriptUrl, {
-                method: 'POST',
-                body: JSON.stringify({
-                    action: 'syncTask',
-                    task: task,
-                    apiKey: this.apiKey
-                })
-            });
-
-            const result = await response.json();
-            return result.success;
-            
-        } catch (error) {
-            console.error('Erreur sync task:', error);
-            return false;
-        }
-    }
-
-    async syncAgent(agent) {
-        if (!this.isEnabled) return false;
-        
-        try {
-            const response = await fetch(this.scriptUrl, {
-                method: 'POST',
-                body: JSON.stringify({
-                    action: 'syncAgent',
-                    agent: agent,
-                    apiKey: this.apiKey
-                })
-            });
-
-            const result = await response.json();
-            return result.success;
-            
-        } catch (error) {
-            console.error('Erreur sync agent:', error);
-            return false;
         }
     }
 
@@ -139,7 +106,8 @@ class GoogleSheetsSync {
             const allData = {
                 tasks: window.dashboard.getTasks(),
                 agents: window.dashboard.getAgents(),
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                dashboardId: this.dashboardId
             };
 
             const response = await fetch(this.scriptUrl, {
@@ -175,9 +143,44 @@ class GoogleSheetsSync {
             const data = await response.json();
             
             if (data.tasks && data.agents) {
-                // Fusionner avec les données locales
-                localStorage.setItem('qwanteos_tasks', JSON.stringify(data.tasks));
-                localStorage.setItem('qwanteos_agents', JSON.stringify(data.agents));
+                // Fusion intelligente : ne pas écraser les données locales
+                const localTasks = window.dashboard.getTasks();
+                const localAgents = window.dashboard.getAgents();
+                
+                // Créer des Sets pour vérifier les doublons
+                const localTaskIds = new Set(localTasks.map(t => t.id.toString()));
+                const localAgentIds = new Set(localAgents.map(a => a.id.toString()));
+                
+                // Filtrer les nouvelles données
+                const newTasks = data.tasks.filter(task => !localTaskIds.has(task.ID.toString()));
+                const newAgents = data.agents.filter(agent => !localAgentIds.has(agent.ID.toString()));
+                
+                // Ajouter seulement les nouvelles données
+                if (newTasks.length > 0) {
+                    const allTasks = [...localTasks, ...newTasks.map(task => ({
+                        id: task.ID,
+                        name: task['Nom Tâche'],
+                        category: task.Catégorie,
+                        agent: task.Agent,
+                        startTime: task['Date Début'],
+                        endTime: task['Date Fin'] || null,
+                        duration: task.Durée || '00:00:00',
+                        status: task.Statut,
+                        description: task.Description || ''
+                    }))];
+                    localStorage.setItem('qwanteos_tasks', JSON.stringify(allTasks));
+                }
+                
+                if (newAgents.length > 0) {
+                    const allAgents = [...localAgents, ...newAgents.map(agent => ({
+                        id: agent.ID,
+                        name: agent.Nom,
+                        email: agent.Email || '',
+                        department: agent.Département || '',
+                        date: agent['Date Ajout'] || new Date().toISOString()
+                    }))];
+                    localStorage.setItem('qwanteos_agents', JSON.stringify(allAgents));
+                }
                 
                 // Rafraîchir le dashboard
                 window.dashboard.updateStatistics();
@@ -185,7 +188,7 @@ class GoogleSheetsSync {
                 window.dashboard.loadAgentsToSelect();
                 window.dashboard.updateTodayTasks();
                 
-                this.showStatus('success', `Données chargées: ${data.tasks.length} tâches, ${data.agents.length} agents`);
+                this.showStatus('success', `Chargé: ${newTasks.length} nouvelles tâches, ${newAgents.length} nouveaux agents`);
                 return true;
             }
         } catch (error) {
@@ -193,21 +196,6 @@ class GoogleSheetsSync {
             this.showStatus('error', 'Erreur chargement');
         }
         return false;
-    }
-
-    async loadStats() {
-        try {
-            const response = await fetch(`${this.scriptUrl}?action=getStats&apiKey=${this.apiKey}`);
-            const data = await response.json();
-            
-            if (data && Array.isArray(data)) {
-                console.log('📊 Statistiques Sheets:', data);
-                return data;
-            }
-        } catch (error) {
-            console.error('Erreur chargement stats:', error);
-        }
-        return null;
     }
 
     showStatus(type, message) {
@@ -239,7 +227,7 @@ window.googleSync = new GoogleSheetsSync();
 function enableCloudSync() {
     if (window.googleSync.enable()) {
         if (window.dashboard) {
-            window.dashboard.showNotification('Synchronisation Google Sheets activée', 'success');
+            window.dashboard.showNotification('Synchronisation sécurisée activée', 'success');
         }
     }
 }
@@ -254,13 +242,13 @@ function disableCloudSync() {
 
 function syncNow() {
     if (window.dashboard) {
-        window.dashboard.showNotification('Synchronisation en cours...', 'info');
+        window.dashboard.showNotification('Synchronisation sécurisée en cours...', 'info');
     }
     
     window.googleSync.syncNow().then(success => {
         if (window.dashboard) {
             if (success) {
-                window.dashboard.showNotification('Synchronisation terminée avec succès', 'success');
+                window.dashboard.showNotification('Synchronisation terminée sans écrasement', 'success');
             } else {
                 window.dashboard.showNotification('Erreur de synchronisation', 'error');
             }
@@ -270,42 +258,16 @@ function syncNow() {
 
 function loadFromSheets() {
     if (window.dashboard) {
-        window.dashboard.showNotification('Chargement depuis Google Sheets...', 'info');
+        window.dashboard.showNotification('Chargement sécurisé depuis Google Sheets...', 'info');
     }
     
     window.googleSync.loadFromSheets().then(success => {
         if (window.dashboard) {
             if (success) {
-                window.dashboard.showNotification('Données chargées avec succès', 'success');
+                window.dashboard.showNotification('Données fusionnées avec succès', 'success');
             } else {
                 window.dashboard.showNotification('Erreur de chargement', 'error');
             }
         }
     });
 }
-
-function loadStatsFromSheets() {
-    if (window.dashboard) {
-        window.dashboard.showNotification('Chargement des statistiques...', 'info');
-    }
-    
-    window.googleSync.loadStats().then(stats => {
-        if (window.dashboard && stats) {
-            window.dashboard.showNotification('Statistiques chargées', 'success');
-            console.log('📈 Stats Sheets:', stats);
-        }
-    });
-}
-
-// Auto-sync quand une tâche est créée ou terminée
-document.addEventListener('taskCreated', (event) => {
-    if (window.googleSync && window.googleSync.isEnabled && event.detail && event.detail.task) {
-        window.googleSync.syncTask(event.detail.task);
-    }
-});
-
-document.addEventListener('agentCreated', (event) => {
-    if (window.googleSync && window.googleSync.isEnabled && event.detail && event.detail.agent) {
-        window.googleSync.syncAgent(event.detail.agent);
-    }
-});
