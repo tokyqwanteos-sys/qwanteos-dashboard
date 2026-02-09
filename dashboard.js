@@ -438,6 +438,7 @@ class Dashboard {
             startTime: Date.now(),
             pausedTime: 0,
             isPaused: false,
+            pauseStartTime: null, // AJOUTÉ pour gérer la pause
             pauses: [],
             duration: '00:00:00',
             status: 'active'
@@ -466,6 +467,7 @@ class Dashboard {
         task.startTime = Date.now();
         task.pausedTime = 0;
         task.isPaused = false;
+        task.pauseStartTime = null; // Initialiser
         
         // Démarrer l'intervalle de mise à jour
         const intervalId = setInterval(() => {
@@ -491,6 +493,7 @@ class Dashboard {
         const task = this.activeTasks.get(taskId);
         if (task && !task.isPaused) {
             task.isPaused = true;
+            task.pauseStartTime = Date.now(); // Enregistrer le moment de la pause
             task.pauses.push({
                 start: new Date().toISOString()
             });
@@ -504,15 +507,18 @@ class Dashboard {
     resumeTimer(taskId) {
         const task = this.activeTasks.get(taskId);
         if (task && task.isPaused) {
+            // CORRECTION : Calculer le temps de pause
+            if (task.pauseStartTime) {
+                const pauseDuration = Date.now() - task.pauseStartTime;
+                task.pausedTime += pauseDuration;
+                task.pauseStartTime = null;
+            }
+            
             task.isPaused = false;
+            
             if (task.pauses.length > 0) {
                 const lastPause = task.pauses[task.pauses.length - 1];
                 lastPause.end = new Date().toISOString();
-                
-                // Calculer le temps de pause
-                const pauseStart = new Date(lastPause.start).getTime();
-                const pauseEnd = new Date(lastPause.end).getTime();
-                task.pausedTime += (pauseEnd - pauseStart);
             }
             
             // Mettre à jour l'affichage
