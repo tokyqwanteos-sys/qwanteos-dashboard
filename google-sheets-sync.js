@@ -41,11 +41,11 @@ class GoogleSheetsSync {
         
         // Sync toutes les 30 secondes
         this.syncInterval = setInterval(() => {
-            this.syncData();
+            this.syncAllData();
         }, 30000);
         
         // Première sync immédiate
-        setTimeout(() => this.syncData(), 1000);
+        setTimeout(() => this.syncAllData(), 1000);
     }
 
     stopAutoSync() {
@@ -55,11 +55,11 @@ class GoogleSheetsSync {
         }
     }
 
-    async syncData() {
+    async syncAllData() {
         if (!this.isEnabled || !window.dashboard) return;
         
         try {
-            const data = {
+            const allData = {
                 tasks: window.dashboard.getTasks(),
                 agents: window.dashboard.getAgents(),
                 timestamp: new Date().toISOString()
@@ -69,7 +69,7 @@ class GoogleSheetsSync {
                 method: 'POST',
                 body: JSON.stringify({
                     action: 'syncAll',
-                    data: data,
+                    data: allData,
                     apiKey: this.apiKey
                 })
             });
@@ -77,10 +77,10 @@ class GoogleSheetsSync {
             const result = await response.json();
             
             if (result.success) {
-                this.showStatus('success', `Sync: ${new Date().toLocaleTimeString()}`);
-                console.log('✅ Sync réussie');
+                this.showStatus('success', `Sync: ${result.message}`);
+                console.log('✅ Sync réussie:', result.message);
             } else {
-                this.showStatus('error', 'Erreur sync');
+                this.showStatus('error', 'Erreur: ' + (result.error || 'Inconnue'));
             }
         } catch (error) {
             console.error('❌ Erreur sync:', error);
@@ -88,11 +88,55 @@ class GoogleSheetsSync {
         }
     }
 
+    async syncTask(task) {
+        if (!this.isEnabled) return false;
+        
+        try {
+            const response = await fetch(this.scriptUrl, {
+                method: 'POST',
+                body: JSON.stringify({
+                    action: 'syncTask',
+                    task: task,
+                    apiKey: this.apiKey
+                })
+            });
+
+            const result = await response.json();
+            return result.success;
+            
+        } catch (error) {
+            console.error('Erreur sync task:', error);
+            return false;
+        }
+    }
+
+    async syncAgent(agent) {
+        if (!this.isEnabled) return false;
+        
+        try {
+            const response = await fetch(this.scriptUrl, {
+                method: 'POST',
+                body: JSON.stringify({
+                    action: 'syncAgent',
+                    agent: agent,
+                    apiKey: this.apiKey
+                })
+            });
+
+            const result = await response.json();
+            return result.success;
+            
+        } catch (error) {
+            console.error('Erreur sync agent:', error);
+            return false;
+        }
+    }
+
     async syncNow() {
         if (!window.dashboard) return false;
         
         try {
-            const data = {
+            const allData = {
                 tasks: window.dashboard.getTasks(),
                 agents: window.dashboard.getAgents(),
                 timestamp: new Date().toISOString()
@@ -102,7 +146,7 @@ class GoogleSheetsSync {
                 method: 'POST',
                 body: JSON.stringify({
                     action: 'syncAll',
-                    data: data,
+                    data: allData,
                     apiKey: this.apiKey
                 })
             });
@@ -110,10 +154,10 @@ class GoogleSheetsSync {
             const result = await response.json();
             
             if (result.success) {
-                this.showStatus('success', `Sync manuelle réussie: ${new Date().toLocaleTimeString()}`);
+                this.showStatus('success', `Sync manuelle: ${result.message}`);
                 return true;
             } else {
-                this.showStatus('error', 'Erreur sync');
+                this.showStatus('error', 'Erreur: ' + (result.error || 'Inconnue'));
                 return false;
             }
         } catch (error) {
@@ -139,8 +183,9 @@ class GoogleSheetsSync {
                 window.dashboard.updateStatistics();
                 window.dashboard.updateCharts();
                 window.dashboard.loadAgentsToSelect();
+                window.dashboard.updateTodayTasks();
                 
-                this.showStatus('success', 'Données chargées depuis Sheets');
+                this.showStatus('success', `Données chargées: ${data.tasks.length} tâches, ${data.agents.length} agents`);
                 return true;
             }
         } catch (error) {
@@ -148,6 +193,21 @@ class GoogleSheetsSync {
             this.showStatus('error', 'Erreur chargement');
         }
         return false;
+    }
+
+    async loadStats() {
+        try {
+            const response = await fetch(`${this.scriptUrl}?action=getStats&apiKey=${this.apiKey}`);
+            const data = await response.json();
+            
+            if (data && Array.isArray(data)) {
+                console.log('📊 Statistiques Sheets:', data);
+                return data;
+            }
+        } catch (error) {
+            console.error('Erreur chargement stats:', error);
+        }
+        return null;
     }
 
     showStatus(type, message) {
@@ -177,15 +237,15 @@ window.googleSync = new GoogleSheetsSync();
 
 // Fonctions globales pour les boutons
 function enableCloudSync() {
-    if (googleSync.enable()) {
+    if (window.googleSync.enable()) {
         if (window.dashboard) {
-            window.dashboard.showNotification('Synchronisation activée', 'success');
+            window.dashboard.showNotification('Synchronisation Google Sheets activée', 'success');
         }
     }
 }
 
 function disableCloudSync() {
-    if (googleSync.disable()) {
+    if (window.googleSync.disable()) {
         if (window.dashboard) {
             window.dashboard.showNotification('Synchronisation désactivée', 'warning');
         }
@@ -197,10 +257,10 @@ function syncNow() {
         window.dashboard.showNotification('Synchronisation en cours...', 'info');
     }
     
-    googleSync.syncNow().then(success => {
+    window.googleSync.syncNow().then(success => {
         if (window.dashboard) {
             if (success) {
-                window.dashboard.showNotification('Synchronisation terminée', 'success');
+                window.dashboard.showNotification('Synchronisation terminée avec succès', 'success');
             } else {
                 window.dashboard.showNotification('Erreur de synchronisation', 'error');
             }
@@ -213,7 +273,7 @@ function loadFromSheets() {
         window.dashboard.showNotification('Chargement depuis Google Sheets...', 'info');
     }
     
-    googleSync.loadFromSheets().then(success => {
+    window.googleSync.loadFromSheets().then(success => {
         if (window.dashboard) {
             if (success) {
                 window.dashboard.showNotification('Données chargées avec succès', 'success');
@@ -223,3 +283,29 @@ function loadFromSheets() {
         }
     });
 }
+
+function loadStatsFromSheets() {
+    if (window.dashboard) {
+        window.dashboard.showNotification('Chargement des statistiques...', 'info');
+    }
+    
+    window.googleSync.loadStats().then(stats => {
+        if (window.dashboard && stats) {
+            window.dashboard.showNotification('Statistiques chargées', 'success');
+            console.log('📈 Stats Sheets:', stats);
+        }
+    });
+}
+
+// Auto-sync quand une tâche est créée ou terminée
+document.addEventListener('taskCreated', (event) => {
+    if (window.googleSync && window.googleSync.isEnabled && event.detail && event.detail.task) {
+        window.googleSync.syncTask(event.detail.task);
+    }
+});
+
+document.addEventListener('agentCreated', (event) => {
+    if (window.googleSync && window.googleSync.isEnabled && event.detail && event.detail.agent) {
+        window.googleSync.syncAgent(event.detail.agent);
+    }
+});
