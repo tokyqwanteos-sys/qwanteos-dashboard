@@ -67,6 +67,8 @@ class Dashboard {
         if (!localStorage.getItem('qwanteos_active_tasks')) {
             localStorage.setItem('qwanteos_active_tasks', JSON.stringify([]));
         }
+
+        
     }
 
     initEvents() {

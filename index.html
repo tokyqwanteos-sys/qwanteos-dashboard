@@ -444,6 +444,62 @@
                     </div>
                 </div>
 
+                <!-- Section Synchronisation Google Sheets -->
+<div class="settings-card">
+    <h3><i class="fas fa-cloud"></i> Synchronisation Multi-Agents</h3>
+    
+    <div class="sync-info">
+        <div class="info-row">
+            <span class="info-label">ID Dashboard :</span>
+            <span id="dashboardId" class="info-value" style="font-size: 0.9rem; color: #7f8c8d;">
+                <!-- Chargé dynamiquement -->
+            </span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Statut :</span>
+            <span id="syncStatus" class="info-value">
+                <i class="fas fa-cloud"></i> Prêt à synchroniser
+            </span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Dernière sync :</span>
+            <span id="lastSyncTime" class="info-value">Jamais</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Mode :</span>
+            <span id="syncMode" class="info-value">Désactivé</span>
+        </div>
+    </div>
+    
+    <div class="sync-controls">
+        <button onclick="enableCloudSync()" class="btn-sync btn-enable">
+            <i class="fas fa-cloud-upload-alt"></i> Activer Sync Auto
+        </button>
+        <button onclick="syncNow()" class="btn-sync btn-now">
+            <i class="fas fa-sync"></i> Sync Maintenant
+        </button>
+        <button onclick="loadFromSheets()" class="btn-sync btn-load">
+            <i class="fas fa-cloud-download-alt"></i> Charger depuis Sheets
+        </button>
+        <button onclick="disableCloudSync()" class="btn-sync btn-disable">
+            <i class="fas fa-cloud-slash"></i> Désactiver
+        </button>
+    </div>
+    
+    <div class="sync-instructions">
+        <h4><i class="fas fa-users"></i> Mode Multi-Agents :</h4>
+        <ul>
+            <li>✅ Chaque dashboard a un ID unique</li>
+            <li>✅ Aucun écrasement des données</li>
+            <li>✅ Vue centralisée sur Google Sheets</li>
+            <li>✅ Compatible avec tous vos agents</li>
+        </ul>
+        <p style="margin-top: 10px; font-size: 0.9rem; color: #7f8c8d;">
+            <i class="fas fa-shield-alt"></i> Vos données sont sécurisées et ne seront jamais écrasées.
+        </p>
+    </div>
+</div>
+
                 <!-- Export/Import -->
                 <div class="settings-card full-width">
                     <h3><i class="fas fa-database"></i> Gestion des Données</h3>
