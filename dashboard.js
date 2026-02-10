@@ -33,7 +33,12 @@ class Dashboard {
     initStorage() {
         // Vérifier et initialiser le stockage local
         if (!localStorage.getItem('qwanteos_agents')) {
-
+            // CORRECTION : Ajout de la variable defaultAgents manquante
+            const defaultAgents = [
+                { id: 1, name: 'Agent 1', email: 'agent1@qwanteos.com', department: 'Développement', date: new Date().toISOString() },
+                { id: 2, name: 'Agent 2', email: 'agent2@qwanteos.com', department: 'Test', date: new Date().toISOString() },
+                { id: 3, name: 'Agent 3', email: 'agent3@qwanteos.com', department: 'Support', date: new Date().toISOString() }
+            ];
             localStorage.setItem('qwanteos_agents', JSON.stringify(defaultAgents));
         }
 
@@ -67,8 +72,6 @@ class Dashboard {
         if (!localStorage.getItem('qwanteos_active_tasks')) {
             localStorage.setItem('qwanteos_active_tasks', JSON.stringify([]));
         }
-
-        
     }
 
     initEvents() {
@@ -81,10 +84,13 @@ class Dashboard {
         });
 
         // Empêcher la soumission du formulaire avec Enter
-        document.getElementById('taskForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.startNewTask();
-        });
+        const taskForm = document.getElementById('taskForm');
+        if (taskForm) {
+            taskForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.startNewTask();
+            });
+        }
 
         // Charger les agents dans le sélecteur
         this.loadAgentsToSelect();
@@ -128,8 +134,11 @@ class Dashboard {
         document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
         
         // Activer l'onglet sélectionné
-        document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
-        document.getElementById(tabId).classList.add('active');
+        const tabBtn = document.querySelector(`[data-tab="${tabId}"]`);
+        const tabPane = document.getElementById(tabId);
+        
+        if (tabBtn) tabBtn.classList.add('active');
+        if (tabPane) tabPane.classList.add('active');
         
         // Recharger les données si nécessaire
         if (tabId === 'tab1') {
@@ -182,11 +191,16 @@ class Dashboard {
         const avgProductivity = tasks.length > 0 ? 
             Math.round((completedTasks / tasks.length) * 100) : 0;
         
-        // Mettre à jour l'interface
-        document.getElementById('totalTasks').textContent = completedTasks;
-        document.getElementById('totalTime').textContent = totalTime;
-        document.getElementById('activeTasks').textContent = activeTasksCount;
-        document.getElementById('avgProductivity').textContent = `${avgProductivity}%`;
+        // Mettre à jour l'interface avec vérifications
+        const totalTasksEl = document.getElementById('totalTasks');
+        const totalTimeEl = document.getElementById('totalTime');
+        const activeTasksEl = document.getElementById('activeTasks');
+        const avgProductivityEl = document.getElementById('avgProductivity');
+        
+        if (totalTasksEl) totalTasksEl.textContent = completedTasks;
+        if (totalTimeEl) totalTimeEl.textContent = totalTime;
+        if (activeTasksEl) activeTasksEl.textContent = activeTasksCount;
+        if (avgProductivityEl) avgProductivityEl.textContent = `${avgProductivity}%`;
         
         // Mettre à jour les statistiques par agent
         this.updateAgentStats(agents, tasks);
@@ -197,6 +211,8 @@ class Dashboard {
 
     updateAgentStats(agents, tasks) {
         const tbody = document.getElementById('agentStatsBody');
+        if (!tbody) return;
+        
         tbody.innerHTML = '';
         
         agents.forEach(agent => {
@@ -269,6 +285,8 @@ class Dashboard {
 
     updateTasksTable(tasks) {
         const tbody = document.getElementById('tasksBody');
+        if (!tbody) return;
+        
         tbody.innerHTML = '';
         
         // Trier par date (plus récent en premier)
@@ -310,6 +328,12 @@ class Dashboard {
         const tasks = this.getTasks();
         const categories = this.getCategories();
         
+        // CORRECTION : Vérification des éléments canvas
+        const categoryCanvas = document.getElementById('categoryChart');
+        const performanceCanvas = document.getElementById('performanceChart');
+        
+        if (!categoryCanvas || !performanceCanvas) return;
+        
         // Données pour le graphique des catégories
         const categoryLabels = [];
         const categoryData = [];
@@ -325,7 +349,6 @@ class Dashboard {
         });
         
         // Détruire l'ancien graphique s'il existe
-        const categoryCanvas = document.getElementById('categoryChart');
         if (categoryCanvas.chart) {
             categoryCanvas.chart.destroy();
         }
@@ -377,7 +400,6 @@ class Dashboard {
         }
         
         // Détruire l'ancien graphique s'il existe
-        const performanceCanvas = document.getElementById('performanceChart');
         if (performanceCanvas.chart) {
             performanceCanvas.chart.destroy();
         }
@@ -436,7 +458,7 @@ class Dashboard {
             startTime: Date.now(),
             pausedTime: 0,
             isPaused: false,
-            pauseStartTime: null, // AJOUTÉ pour gérer la pause
+            pauseStartTime: null,
             pauses: [],
             duration: '00:00:00',
             status: 'active'
@@ -453,7 +475,10 @@ class Dashboard {
         this.updateRealTimeStats();
         
         // Réinitialiser le formulaire
-        document.getElementById('taskForm').reset();
+        const taskForm = document.getElementById('taskForm');
+        if (taskForm) {
+            taskForm.reset();
+        }
         
         this.showNotification(`Tâche "${name}" démarrée`, 'success');
     }
@@ -465,7 +490,7 @@ class Dashboard {
         task.startTime = Date.now();
         task.pausedTime = 0;
         task.isPaused = false;
-        task.pauseStartTime = null; // Initialiser
+        task.pauseStartTime = null;
         
         // Démarrer l'intervalle de mise à jour
         const intervalId = setInterval(() => {
@@ -491,7 +516,7 @@ class Dashboard {
         const task = this.activeTasks.get(taskId);
         if (task && !task.isPaused) {
             task.isPaused = true;
-            task.pauseStartTime = Date.now(); // Enregistrer le moment de la pause
+            task.pauseStartTime = Date.now();
             task.pauses.push({
                 start: new Date().toISOString()
             });
@@ -505,7 +530,7 @@ class Dashboard {
     resumeTimer(taskId) {
         const task = this.activeTasks.get(taskId);
         if (task && task.isPaused) {
-            // CORRECTION : Calculer le temps de pause
+            // Calculer le temps de pause
             if (task.pauseStartTime) {
                 const pauseDuration = Date.now() - task.pauseStartTime;
                 task.pausedTime += pauseDuration;
@@ -604,8 +629,11 @@ class Dashboard {
                     <p>Aucune tâche en cours. Démarrez une nouvelle tâche.</p>
                 </div>
             `;
-            document.getElementById('todayActiveTask').textContent = 'Aucune';
-            document.getElementById('todayActiveTask').classList.remove('pulse');
+            const todayActiveTask = document.getElementById('todayActiveTask');
+            if (todayActiveTask) {
+                todayActiveTask.textContent = 'Aucune';
+                todayActiveTask.classList.remove('pulse');
+            }
         } else {
             let html = '<div class="active-tasks-container">';
             html += `<h3 style="margin-bottom: 15px; color: #2c3e50;">Tâches Actives (${this.activeTasks.size})</h3>`;
@@ -721,8 +749,11 @@ class Dashboard {
             container.innerHTML = html;
             
             // Mettre à jour le compteur de tâches actives
-            document.getElementById('todayActiveTask').textContent = `${this.activeTasks.size} tâche(s)`;
-            document.getElementById('todayActiveTask').classList.add('pulse');
+            const todayActiveTask = document.getElementById('todayActiveTask');
+            if (todayActiveTask) {
+                todayActiveTask.textContent = `${this.activeTasks.size} tâche(s)`;
+                todayActiveTask.classList.add('pulse');
+            }
         }
     }
 
@@ -915,47 +946,47 @@ class Dashboard {
         const select = document.getElementById('taskCategory');
         const categoriesDiv = document.getElementById('categoriesList');
         
-        if (!select || !categoriesDiv) return;
+        if (select) {
+            select.innerHTML = '<option value="">Sélectionner une catégorie</option>';
+            categories.forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat.name;
+                option.textContent = cat.name;
+                select.appendChild(option);
+            });
+        }
         
-        // Mettre à jour le sélecteur
-        select.innerHTML = '<option value="">Sélectionner une catégorie</option>';
-        categories.forEach(cat => {
-            const option = document.createElement('option');
-            option.value = cat.name;
-            option.textContent = cat.name;
-            select.appendChild(option);
-        });
-        
-        // Mettre à jour la liste d'affichage
-        categoriesDiv.innerHTML = '';
-        categories.forEach(cat => {
-            const div = document.createElement('div');
-            div.className = 'category-item';
-            div.style.cssText = `
-                display: inline-block;
-                padding: 8px 15px;
-                margin: 5px;
-                background: #f8f9fa;
-                border-radius: 20px;
-                border-left: 4px solid ${cat.color};
-            `;
-            div.innerHTML = `
-                <span style="color: ${cat.color}">■</span> ${cat.name}
-                <button onclick="dashboard.deleteCategory(${cat.id})" style="
-                    background: #e74c3c;
-                    color: white;
-                    border: none;
-                    padding: 3px 8px;
-                    border-radius: 3px;
-                    cursor: pointer;
-                    margin-left: 8px;
-                    font-size: 12px;
-                ">
-                    <i class="fas fa-times"></i>
-                </button>
-            `;
-            categoriesDiv.appendChild(div);
-        });
+        if (categoriesDiv) {
+            categoriesDiv.innerHTML = '';
+            categories.forEach(cat => {
+                const div = document.createElement('div');
+                div.className = 'category-item';
+                div.style.cssText = `
+                    display: inline-block;
+                    padding: 8px 15px;
+                    margin: 5px;
+                    background: #f8f9fa;
+                    border-radius: 20px;
+                    border-left: 4px solid ${cat.color};
+                `;
+                div.innerHTML = `
+                    <span style="color: ${cat.color}">■</span> ${cat.name}
+                    <button onclick="dashboard.deleteCategory(${cat.id})" style="
+                        background: #e74c3c;
+                        color: white;
+                        border: none;
+                        padding: 3px 8px;
+                        border-radius: 3px;
+                        cursor: pointer;
+                        margin-left: 8px;
+                        font-size: 12px;
+                    ">
+                        <i class="fas fa-times"></i>
+                    </button>
+                `;
+                categoriesDiv.appendChild(div);
+            });
+        }
     }
 
     addAgent() {
@@ -1116,7 +1147,7 @@ class Dashboard {
     loadSettings() {
         const settings = this.getSettings();
         
-        // Appliquer les paramètres
+        // Appliquer les paramètres avec vérifications
         const themeSelect = document.getElementById('dashboardTheme');
         const timeFormatSelect = document.getElementById('timeFormat');
         const autoSaveSelect = document.getElementById('autoSave');
@@ -1136,9 +1167,15 @@ class Dashboard {
     }
 
     saveSettings() {
-        const theme = document.getElementById('dashboardTheme').value;
-        const timeFormat = document.getElementById('timeFormat').value;
-        const autoSave = document.getElementById('autoSave').value;
+        const themeSelect = document.getElementById('dashboardTheme');
+        const timeFormatSelect = document.getElementById('timeFormat');
+        const autoSaveSelect = document.getElementById('autoSave');
+        
+        if (!themeSelect || !timeFormatSelect || !autoSaveSelect) return;
+        
+        const theme = themeSelect.value;
+        const timeFormat = timeFormatSelect.value;
+        const autoSave = autoSaveSelect.value;
         
         const settings = {
             theme,
@@ -1310,8 +1347,6 @@ class Dashboard {
     updateSystemInfo() {
         try {
             const tasks = this.getTasks();
-            const agents = this.getAgents();
-            const categories = this.getCategories();
             
             // Calculer la taille des données
             let totalSize = 0;
@@ -1674,6 +1709,17 @@ function resetDashboard() {
 function changeTheme(value) { 
     if (window.dashboard) window.dashboard.changeTheme(value); 
 }
+function exportSettings() {
+    if (window.dashboard) {
+        window.dashboard.backupData();
+    }
+}
+function importSettings() {
+    const fileInput = document.getElementById('restoreFile');
+    if (fileInput) {
+        fileInput.click();
+    }
+}
 
 // Filtrer par date
 function applyDateFilter() {
@@ -1682,20 +1728,24 @@ function applyDateFilter() {
     
     if (window.dashboard) {
         window.dashboard.showNotification('Filtre appliqué', 'success');
-        // Ici vous pouvez implémenter la logique de filtrage
     }
 }
 
 function resetFilter() {
-    document.getElementById('startDate').value = '';
-    document.getElementById('endDate').value = '';
+    const startDate = document.getElementById('startDate');
+    const endDate = document.getElementById('endDate');
+    
+    if (startDate) startDate.value = '';
+    if (endDate) endDate.value = '';
+    
     if (window.dashboard) {
         window.dashboard.showNotification('Filtre réinitialisé', 'success');
     }
 }
 
-// Gestionnaire d'import de fichier
+// Initialiser le dashboard lorsque la page est chargée
 document.addEventListener('DOMContentLoaded', () => {
+    // Gestionnaire d'import de fichier
     const restoreFileInput = document.getElementById('restoreFile');
     if (restoreFileInput) {
         restoreFileInput.addEventListener('change', function() {
@@ -1708,9 +1758,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-});
-
-// Initialiser le dashboard lorsque la page est chargée
-document.addEventListener('DOMContentLoaded', () => {
+    
+    // Initialiser le dashboard
+    console.log('Dashboard SETUP QWANTEOS - Initialisation...');
     window.dashboard = new Dashboard();
+    console.log('Dashboard prêt !');
 });

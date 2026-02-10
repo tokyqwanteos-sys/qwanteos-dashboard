@@ -1,13 +1,29 @@
 {
   "name": "qwanteos-dashboard",
-  "version": "1.0.0",
-  "description": "Dashboard SETUP QWANTEOS",
+  "version": "2.0.1",
+  "description": "Dashboard de suivi de productivité pour l'équipe SETUP QWANTEOS",
   "main": "index.html",
   "scripts": {
-    "dev": "live-server --port=3000",
-    "build": "echo 'Build complete'"
+    "dev": "live-server --port=3000 --open=./index.html --no-browser",
+    "start": "npm run dev",
+    "build": "echo 'Build complete - Dashboard SETUP QWANTEOS v2.0.1'",
+    "test": "echo \"Aucun test configuré\" && exit 0"
   },
+  "keywords": [
+    "dashboard",
+    "productivity",
+    "tracking",
+    "time-management",
+    "qwanteos",
+    "setup"
+  ],
+  "author": "SETUP QWANTEOS Team",
+  "license": "MIT",
   "devDependencies": {
     "live-server": "^1.2.2"
+  },
+  "engines": {
+    "node": ">=14.0.0",
+    "npm": ">=6.0.0"
   }
 }
